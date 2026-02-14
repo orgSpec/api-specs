@@ -165,7 +165,7 @@ jobs:
 
                 echo "📌 Actual version directory: $VERSION_DIR"
 
-                SPEC_URL="https://raw.githubusercontent.com/api-specs-test/api-specs/${BRANCH_NAME}/openapi/${VENDOR}/${API}/${VERSION_DIR}/openapi.yaml"
+                SPEC_URL="https://raw.githubusercontent.com/orgSpec/api-specs/${BRANCH_NAME}/openapi/${VENDOR}/${API}/${VERSION_DIR}/openapi.yaml"
                 echo "📎 Spec URL: $SPEC_URL"
 
                 echo "🚀 Sending repository_dispatch to $CONNECTOR_REPO..."
@@ -173,7 +173,7 @@ jobs:
                   repos/"$CONNECTOR_REPO"/dispatches \
                   -X POST \
                   -f event_type=openapi-update \
-                  -f client_payload[sender]=api-specs-test/api-specs \
+                  -f client_payload[sender]=orgSpec/api-specs \
                   -f client_payload[openapi_url]="$SPEC_URL" \
                   -f client_payload[spec_version]="$VERSION_DIR"
 
