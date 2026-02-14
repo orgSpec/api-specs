@@ -2,7 +2,7 @@ name: Auto Review & Merge
 
 on:
   pull_request:
-    types: [opened, synchronize]
+    types: [opened, synchronize, labeled]
 
 jobs:
   review-and-merge:
