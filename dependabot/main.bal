@@ -76,11 +76,17 @@ function extractRolloutNumber(string path) returns string|error {
 }
 
 // List directory contents from GitHub
-function listGitHubDirectory(string owner, string repo, string branch, string path) returns string[]|error {
+function listGitHubDirectory(string owner, string repo, string branch, string path, string token) returns string[]|error {
     string url = string `https://api.github.com/repos/${owner}/${repo}/contents/${path}?ref=${branch}`;
 
     http:Client httpClient = check new (url);
-    http:Response response = check httpClient->get("");
+    map<string> headers = {
+        "Authorization": string `Bearer ${token}`,
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28"
+    };
+
+    http:Response response = check httpClient->get("", headers);
 
     if response.statusCode != 200 {
         return error(string `Failed to list directory: HTTP ${response.statusCode}`);
@@ -108,10 +114,10 @@ function listGitHubDirectory(string owner, string repo, string branch, string pa
 }
 
 // Find latest rollout number in a directory
-function findLatestRollout(string owner, string repo, string branch, string basePath) returns string|error {
+function findLatestRollout(string owner, string repo, string branch, string basePath, string token) returns string|error {
     io:println(string `  🔍 Searching for rollouts in ${basePath}...`);
 
-    string[] contents = check listGitHubDirectory(owner, repo, branch, basePath);
+    string[] contents = check listGitHubDirectory(owner, repo, branch, basePath, token);
 
     int maxRollout = 0;
     foreach string item in contents {
@@ -554,7 +560,7 @@ function processFileBasedRepo(Repository repo) returns UpdateResult|error? {
 }
 
 // Process repository with rollout-based versioning strategy (for HubSpot)
-function processRolloutBasedRepo(Repository repo) returns UpdateResult|error? {
+function processRolloutBasedRepo(github:Client githubClient, Repository repo, string token) returns UpdateResult|error? {
     io:println(string `Checking: ${repo.name} (${repo.vendor}/${repo.api}) [Rollout-Based Strategy]`);
 
     string branch = repo.branch is string ? <string>repo.branch : "main";
@@ -570,8 +576,8 @@ function processRolloutBasedRepo(Repository repo) returns UpdateResult|error? {
 
     string basePath = pathParts[0] + "/Rollouts";
 
-    // Find the latest rollout number
-    string|error latestRollout = findLatestRollout(repo.owner, repo.repo, branch, basePath);
+    // Find the latest rollout number (pass token)
+    string|error latestRollout = findLatestRollout(repo.owner, repo.repo, branch, basePath, token);
 
     if latestRollout is error {
         io:println("  ❌ Failed to find rollouts: " + latestRollout.message());
@@ -717,7 +723,7 @@ public function main() returns error? {
         } else if repo.versioningStrategy == FILE_BASED {
             result = processFileBasedRepo(repo);
         } else if repo.versioningStrategy == ROLLOUT_BASED {
-            result = processRolloutBasedRepo(repo);
+            result = processRolloutBasedRepo(githubClient, repo, tokenValue);
         } else {
             io:println(string `⚠️  Unknown versioning strategy: ${repo.versioningStrategy}`);
         }
