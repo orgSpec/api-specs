@@ -158,7 +158,7 @@ jobs:
           fi
 
       - name: Trigger Connector Regeneration
-        if: steps.check_updates.outputs.updates_found == 'true' && (env.merge_successful == 'true' || env.merge_successful == 'timeout')
+        if: steps.check_updates.outputs.updates_found == 'true' && env.merge_successful == 'true'
         env:
           GH_TOKEN: ${{ secrets.CROSS_REPO_PAT }}
         run: |
