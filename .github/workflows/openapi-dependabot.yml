@@ -73,6 +73,7 @@ jobs:
 
       - name: Create Pull Request
         if: steps.check_updates.outputs.updates_found == 'true' && env.BRANCH_NAME != ''
+        id: create_pr
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
@@ -104,16 +105,59 @@ jobs:
           EOF
           )
 
-          gh pr create \
+          PR_URL=$(gh pr create \
             --title "$PR_TITLE" \
             --body "$PR_BODY" \
             --base main \
             --head "$BRANCH_NAME" \
-            --label "openapi-update,automated,dependencies"
+            --label "openapi-update,automated,dependencies")
+
           echo "✅ Pull Request created successfully!"
+          echo "PR_URL: $PR_URL"
+
+          # Extract PR number from URL
+          PR_NUMBER=$(echo "$PR_URL" | grep -oE '[0-9]+$')
+          echo "pr_number=${PR_NUMBER}" >> $GITHUB_OUTPUT
+          echo "PR_NUMBER=${PR_NUMBER}" >> $GITHUB_ENV
+
+      - name: Wait for Auto-Merge
+        if: steps.check_updates.outputs.updates_found == 'true' && env.PR_NUMBER != ''
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: |
+          echo "⏳ Waiting for auto-review and merge workflow..."
+          PR_NUMBER="${{ steps.create_pr.outputs.pr_number }}"
+          MAX_WAIT=300  # 5 minutes maximum wait time
+          ELAPSED=0
+          INTERVAL=10
+
+          while [ $ELAPSED -lt $MAX_WAIT ]; do
+            sleep $INTERVAL
+            ELAPSED=$((ELAPSED + INTERVAL))
+
+            # Check PR status
+            PR_STATE=$(gh pr view "$PR_NUMBER" --json state -q '.state')
+
+            if [ "$PR_STATE" = "MERGED" ]; then
+              echo "✅ PR #${PR_NUMBER} has been merged successfully!"
+              echo "merge_successful=true" >> $GITHUB_ENV
+              break
+            elif [ "$PR_STATE" = "CLOSED" ]; then
+              echo "❌ PR #${PR_NUMBER} was closed without merging"
+              echo "merge_successful=false" >> $GITHUB_ENV
+              exit 1
+            fi
+
+            echo "⏳ Still waiting... (${ELAPSED}s elapsed)"
+          done
+
+          if [ $ELAPSED -ge $MAX_WAIT ]; then
+            echo "⚠️ Timeout waiting for PR merge. Triggering connector generation anyway..."
+            echo "merge_successful=timeout" >> $GITHUB_ENV
+          fi
 
       - name: Trigger Connector Regeneration
-        if: steps.check_updates.outputs.updates_found == 'true' && env.BRANCH_NAME != ''
+        if: steps.check_updates.outputs.updates_found == 'true' && (env.merge_successful == 'true' || env.merge_successful == 'timeout')
         env:
           GH_TOKEN: ${{ secrets.CROSS_REPO_PAT }}
         run: |
@@ -165,7 +209,8 @@ jobs:
 
                 echo "📌 Actual version directory: $VERSION_DIR"
 
-                SPEC_URL="https://raw.githubusercontent.com/orgSpec/api-specs/${BRANCH_NAME}/openapi/${VENDOR}/${API}/${VERSION_DIR}/openapi.yaml"
+                # Use main branch since PR is merged
+                SPEC_URL="https://raw.githubusercontent.com/orgSpec/api-specs/main/openapi/${VENDOR}/${API}/${VERSION_DIR}/openapi.yaml"
                 echo "📎 Spec URL: $SPEC_URL"
 
                 echo "🚀 Sending repository_dispatch to $CONNECTOR_REPO..."
@@ -185,3 +230,12 @@ jobs:
           done < UPDATE_SUMMARY.txt
 
           echo "✅ All connector regenerations triggered!"
+
+      - name: Notify on failure
+        if: failure() && steps.check_updates.outputs.updates_found == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: |
+          if [ -n "$PR_NUMBER" ]; then
+            gh pr comment "$PR_NUMBER" --body "⚠️ Connector regeneration workflow failed. Please check the [workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details."
+          fi
