@@ -8,10 +8,8 @@ jobs:
   review-and-merge:
     runs-on: ubuntu-latest
 
-    # Only run on PRs created by the OpenAPI Dependabot workflow
-    if: |
-      github.event.pull_request.user.login == 'github-actions[bot]' &&
-      contains(github.event.pull_request.labels.*.name, 'openapi-update')
+    # Only run on PRs with the openapi-update label (created by the OpenAPI Dependabot workflow)
+    if: contains(github.event.pull_request.labels.*.name, 'openapi-update')
 
     steps:
       - name: Checkout repository
