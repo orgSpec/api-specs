@@ -278,7 +278,7 @@ function saveSpec(string content, string localPath) returns error? {
         check file:createDir(dirPath, file:RECURSIVE);
     }
 
-    // Write as openapi.yaml (always YAML format)
+    // Write as openapi.json (JSON format)
     check io:fileWriteString(localPath, content);
     io:println(string `  ✅ Saved to ${localPath}`);
     return;
@@ -415,7 +415,7 @@ function processReleaseTagRepo(github:Client githubClient, Repository repo) retu
 
             // Structure: openapi/{vendor}/{api}/{apiVersion}/
             string versionDir = "../openapi/" + repo.vendor + "/" + repo.api + "/" + apiVersion;
-            string localPath = versionDir + "/openapi.yaml";
+            string localPath = versionDir + "/openapi.json";
 
             // Save the spec
             error? saveResult = saveSpec(specContent, localPath);
@@ -511,7 +511,7 @@ function processFileBasedRepo(Repository repo) returns UpdateResult|error? {
 
         // Structure: openapi/{vendor}/{api}/{apiVersion}/
         string versionDir = "../openapi/" + repo.vendor + "/" + repo.api + "/" + apiVersion;
-        string localPath = versionDir + "/openapi.yaml";
+        string localPath = versionDir + "/openapi.json";
 
         // For content-only changes in same version, REPLACE existing files
         if !versionChanged && contentChanged {
@@ -626,7 +626,7 @@ function processRolloutBasedRepo(Repository repo) returns UpdateResult|error? {
 
         // Structure: openapi/{vendor}/{api}/rollout-{rolloutNumber}/
         string versionDir = "../openapi/" + repo.vendor + "/" + repo.api + "/rollout-" + latestRollout;
-        string localPath = versionDir + "/openapi.yaml";
+        string localPath = versionDir + "/openapi.json";
 
         // For content-only changes in same rollout, REPLACE existing files
         if !rolloutChanged && contentChanged {

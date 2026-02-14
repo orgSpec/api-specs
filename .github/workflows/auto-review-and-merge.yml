@@ -63,8 +63,8 @@ jobs:
           VALIDATION_PASSED=true
           VALIDATION_ERRORS=""
 
-          # Find all openapi.yaml files in the changed files
-          OPENAPI_FILES=$(gh pr view ${{ github.event.pull_request.number }} --json files -q '.files[].path' | grep 'openapi.yaml$' || true)
+          # Find all openapi.json files in the changed files
+          OPENAPI_FILES=$(gh pr view ${{ github.event.pull_request.number }} --json files -q '.files[].path' | grep 'openapi.json$' || true)
 
           if [ -z "$OPENAPI_FILES" ]; then
             echo "⚠️ No OpenAPI files found in this PR"
@@ -114,18 +114,28 @@ jobs:
               fi
             fi
 
-            # Basic YAML syntax validation (check if file is readable)
-            if ! grep -q "openapi:" "$file" 2>/dev/null; then
-              echo "❌ Invalid OpenAPI file (missing 'openapi:' field): $file"
+            # Validate JSON format and check for "openapi" field
+            if ! jq empty "$file" 2>/dev/null; then
+              echo "❌ Invalid JSON format in: $file"
               VALIDATION_PASSED=false
-              VALIDATION_ERRORS="${VALIDATION_ERRORS}\n- Missing 'openapi:' field in: $file"
+              VALIDATION_ERRORS="${VALIDATION_ERRORS}\n- Invalid JSON format in: $file"
             else
-              echo "✅ Valid OpenAPI format: $file"
-            fi
+              echo "✅ Valid JSON format: $file"
 
-            # Check if info section exists
-            if ! grep -q "info:" "$file" 2>/dev/null; then
-              echo "⚠️ Warning: Missing 'info:' section in: $file"
+              # Check for "openapi" field in JSON
+              if ! jq -e '.openapi' "$file" >/dev/null 2>&1; then
+                echo "❌ Missing 'openapi' field in: $file"
+                VALIDATION_PASSED=false
+                VALIDATION_ERRORS="${VALIDATION_ERRORS}\n- Missing 'openapi' field in: $file"
+              else
+                OPENAPI_VERSION=$(jq -r '.openapi' "$file")
+                echo "✅ Valid OpenAPI spec (version: $OPENAPI_VERSION)"
+              fi
+
+              # Check for "info" field
+              if ! jq -e '.info' "$file" >/dev/null 2>&1; then
+                echo "⚠️ Warning: Missing 'info' field in: $file"
+              fi
             fi
 
           done <<< "$OPENAPI_FILES"
@@ -238,5 +248,5 @@ jobs:
               Please review the changes manually before merging.
 
               ---
-            🤖 Ballerina Bot`
+              🤖 Ballerina Bot`
             });
